@@ -1,0 +1,139 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Пользователь
+model User {
+  id          Int       @id @default(autoincrement())
+
+  // == ДАННЫЕ ИЗ TELEGRAM ==
+  telegramId  String    @unique
+  firstName   String
+  lastName    String? 
+  username    String?
+  photoUrl    String? 
+  chatInstance String
+
+  // == ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ (по желанию) ==
+  name        String?
+  photo       String?
+
+  // == ОСТАЛЬНЫЕ ДАННЫЕ ПОЛЬЗОВАТЕЛЯ ==
+  role        Role      @default(USER) 
+  // dialogs     Dialog[]  @relation("UserDialogs")
+  lastAuth    DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  RefreshToken RefreshToken[]
+  @@map("users")
+}
+
+// Роли пользователей
+enum Role {
+  USER       // обычный пользователь
+  ORG_USER   // пользователь организации
+  ADMIN      // администратор
+}
+
+// Refresh токены
+model RefreshToken {
+  id              Int       @id @default(autoincrement())
+  token           String    @unique
+  jti             String    @unique
+  createdAt       DateTime  @default(now())
+
+  // связь к пользователю
+  userId          Int
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+/*
+/// Список доступных LLM-моделей
+model AiModel {
+  id            Int       @id @default(autoincrement())
+  routerModel   String    @unique           // идентификатор в OpenRouter
+  name          String                      // читаемое название
+  isFree        Boolean   @default(false)
+  pricePerToken Float     @default(0)       // стоимость токена (мб по запросам) 
+  createdAt     DateTime  @default(now())
+}
+
+/// Диалоги (мультидиалоги и ветвления)
+model Dialog {
+  id             Int       @id @default(autoincrement())
+  title          String    
+  user           User      @relation("UserDialogs", fields: [userId], references: [id])
+  userId         Int
+  model          AiModel   @relation(fields: [modelId], references: [id])
+  modelId        Int
+  parentDialog   Dialog?   @relation("DialogBranches", fields: [parentDialogId], references: [id])
+  parentDialogId Int?
+  children       Dialog[]  @relation("DialogBranches")
+  messages       Message[]
+  shareLinks     ShareLink[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+/// Сообщения внутри диалогов
+model Message {
+  id              Int            @id @default(autoincrement())
+  dialog          Dialog         @relation(fields: [dialogId], references: [id])
+  dialogId        Int
+  parentMessage   Message?       @relation("MessageReplies", fields: [parentMessageId], references: [id])
+  parentMessageId Int?
+  replies         Message[]      @relation("MessageReplies")
+  sender          MessageSender  @default(USER)
+  content         String
+  file            File?          @relation(fields: [fileId], references: [id])
+  fileId          Int?
+  edited          Boolean        @default(false)
+  shareLinks      ShareLink[]    // публичные ссылки на конкретное сообщение
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+enum MessageSender {
+  USER    // сообщение от пользователя
+  AI      // сообщение от модели
+}
+
+/// Загрузка файлов (картинки, документы)
+model File {
+  id           Int      @id @default(autoincrement())
+  filename     String
+  mimeType     String
+  url          String   // путь или URL хранения
+  sizeBytes    Int
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  uploadedById Int
+  message      Message? @relation()
+  createdAt    DateTime @default(now())
+}
+
+/// Публичные ссылки для экспорта сообщения или чата
+model ShareLink {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique   // генерируется в коде через UUID v4
+  dialog    Dialog   @relation(fields: [dialogId], references: [id])
+  dialogId  Int
+  message   Message? @relation(fields: [messageId], references: [id])
+  messageId Int?
+  expiresAt DateTime? // по желанию ограничить время жизни
+  createdAt DateTime  @default(now())
+}
+*/
