@@ -12,7 +12,6 @@ import * as bcrypt from 'bcrypt';
 export interface TokenPayload {
   id: number;
   telegramId: string;
-  role: string;
   jti: string;
 }
 
@@ -29,7 +28,10 @@ export class TokenService {
   async genJWTPair(payload: Omit<TokenPayload, 'jti'>) {
     const jti = uuidv4();
     const accessToken = this.jwtAccess.sign(payload, { expiresIn: '15m' });
-    const refreshToken = this.jwtRefresh.sign(payload, { expiresIn: '1d' });
+    const refreshToken = this.jwtRefresh.sign(
+      { ...payload, jti: jti },
+      { expiresIn: '1d' },
+    );
     const refreshTokenHash = await bcrypt.hash(refreshToken, this.saltRounds);
 
     try {
@@ -53,21 +55,19 @@ export class TokenService {
     try {
       const decoded = this.jwtAccess.verify<TokenPayload>(accessToken);
 
-      const { id, telegramId, role } = decoded;
-      return { id, telegramId, role };
+      const { id, telegramId } = decoded;
+      return { id, telegramId };
     } catch {
       throw new UnauthorizedException('Ошибка авторизации пользователя');
     }
   }
 
-  async validateRefreshToken(
-    refreshToken: string,
-  ): Promise<Omit<TokenPayload, 'jti'>> {
+  async validateRefreshToken(refreshToken: string): Promise<TokenPayload> {
     try {
       const decoded = this.jwtRefresh.verify<TokenPayload>(refreshToken);
 
       const refreshTokenDB = await this.prisma.refreshToken.findUnique({
-        where: { token: decoded.jti },
+        where: { jti: decoded.jti },
       });
 
       if (!refreshTokenDB) {
@@ -80,10 +80,21 @@ export class TokenService {
         throw new UnauthorizedException('Ошибка авторизации пользователя');
       }
 
-      const { id, telegramId, role } = decoded;
-      return { id, telegramId, role };
+      const { id, telegramId } = decoded;
+      return { id, telegramId, jti: refreshTokenDB.jti };
     } catch {
       throw new UnauthorizedException('Ошибка авторизации пользователя');
+    }
+  }
+
+  async revokeRefreshToken(jti: string) {
+    try {
+      await this.prisma.refreshToken.delete({ where: { jti: jti } });
+      return true;
+    } catch {
+      throw new InternalServerErrorException(
+        'Возникла непредвиденная ошибка сервера, пожалуйста повторите попытку позже.',
+      );
     }
   }
 }

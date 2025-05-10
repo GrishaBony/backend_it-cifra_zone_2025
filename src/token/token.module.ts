@@ -1,20 +1,11 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { TokenService } from './token.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
+@Global()
 @Module({
-  imports: [
-    ConfigModule,
-    // JwtModule.registerAsync({
-    //   imports: [ConfigModule],
-    //   inject: [ConfigService],
-    //   useFactory: (config: ConfigService) => ({
-    //     global: true,
-    //     secret: config.get<string>('JWT_ACCESS_SECRET'),
-    //   }),
-    // }),
-  ],
+  imports: [ConfigModule],
   providers: [
     TokenService,
     // JwtService для access-токенов
