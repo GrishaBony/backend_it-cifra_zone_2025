@@ -7,6 +7,11 @@ import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { TokenModule } from './token/token.module';
 import { OpenrouterModule } from './openrouter/openrouter.module';
+import { APP_GUARD } from '@nestjs/core';
+import { AuthRolesGuard } from './auth-roles/auth-roles.guard';
+import { DateUtilsService } from './date-utils/date-utils.service';
+import { DateUtilsModule } from './date-utils/date-utils.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -16,8 +21,10 @@ import { OpenrouterModule } from './openrouter/openrouter.module';
     PrismaModule,
     TokenModule,
     OpenrouterModule,
+    DateUtilsModule,
+    AdminModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, DateUtilsService],
 })
 export class AppModule {}
