@@ -62,7 +62,6 @@ export class AuthService {
       const payload: Omit<TokenPayload, 'jti'> = {
         id: dbUser.id,
         telegramId: dbUser.telegramId,
-        role: dbUser.role,
       };
       const tokens = await this.tokenService.genJWTPair(payload);
 
@@ -109,7 +108,6 @@ export class AuthService {
       const payload: Omit<TokenPayload, 'jti'> = {
         id: dbUser.id,
         telegramId: dbUser.telegramId,
-        role: dbUser.role,
       };
       const tokens = await this.tokenService.genJWTPair(payload);
 
