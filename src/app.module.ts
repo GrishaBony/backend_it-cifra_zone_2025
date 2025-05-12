@@ -11,7 +11,14 @@ import { APP_GUARD } from '@nestjs/core';
 import { AuthRolesGuard } from './auth-roles/auth-roles.guard';
 import { DateUtilsService } from './date-utils/date-utils.service';
 import { DateUtilsModule } from './date-utils/date-utils.module';
-import { AdminModule } from './admin/admin.module';
+import { AdminModule } from './ai-model/ai-model.module';
+import { BotService } from './bot/bot.service';
+import { BotModule } from './bot/bot.module';
+import { ScenesModule } from './bot/scenes/scenes.module';
+import { SupportModule } from './support/support.module';
+import { ChatService } from './chat/chat.service';
+import { ChatController } from './chat/chat.controller';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -23,8 +30,12 @@ import { AdminModule } from './admin/admin.module';
     OpenrouterModule,
     DateUtilsModule,
     AdminModule,
+    BotModule,
+    SupportModule,
+    ChatModule,
+    // ScenesModule,
   ],
-  controllers: [AppController],
-  providers: [AppService, DateUtilsService],
+  controllers: [AppController, ChatController],
+  providers: [AppService, DateUtilsService, BotService, ChatService],
 })
 export class AppModule {}

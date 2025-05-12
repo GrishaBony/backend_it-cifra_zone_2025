@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import { UpdateUserDto } from 'src/dto/update.user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
@@ -25,6 +26,26 @@ export class UserService {
       throw new NotFoundException('Пользователь не найден.');
     } else {
       return user;
+    }
+  }
+
+  async updateById(userId: number, data: UpdateUserDto) {
+    try {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: data,
+      });
+    } catch (error) {
+      if (
+        error instanceof PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException('Пользователь не найден.');
+      } else {
+        throw new InternalServerErrorException(
+          'Возникла внутренняя ошибка сервера, во время обновления пользователя.',
+        );
+      }
     }
   }
 

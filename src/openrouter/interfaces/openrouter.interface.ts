@@ -1,107 +1,116 @@
-// Subtypes:
-export type TextContent = {
-  type: 'text';
-  text: string;
-};
+// AI Helped
 
-export type ImageContentPart = {
-  type: 'image_url';
-  image_url: {
-    url: string; // URL or base64 encoded image data
-    detail?: 'auto' | 'low' | 'high'; // Optional, defaults to "auto"
-  };
-};
+// Определяет роль отправителя сообщения в OpenRouter/OpenAI API
+export type OpenrouterMessageRole = 'system' | 'user' | 'assistant' | 'tool';
 
-export type ContentPart = TextContent | ImageContentPart;
-
+// Определяет структуру сообщения для OpenRouter/OpenAI API
 export interface OpenrouterMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string | ContentPart[]; // Может быть строкой или массивом ContentPart (для мультимодальных моделей)
+  role: OpenrouterMessageRole;
+  content: string | null; // Может быть null, если, например, это tool_calls
+  // name?: string; // Опционально, для указания имени, если роль 'tool' или 'function'
+  // tool_calls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string; }; }>; // Опционально, для вызовов инструментов
+  // tool_call_id?: string; // Опционально, ID вызова инструмента
 }
 
+// Определяет структуру запроса на завершение чата к OpenRouter API
 export interface OpenrouterCompletionRequest {
-  model: string;
+  model: string; // Название модели, например, "openai/gpt-3.5-turbo"
   messages: OpenrouterMessage[];
-  stream?: boolean;
-  temperature?: number; // Опционально
-  max_tokens?: number; // Опционально
+  stream?: boolean; // Включить ли потоковую передачу
+  max_tokens?: number; // Максимальное количество токенов для генерации
+  temperature?: number; // Температура генерации (0.0 - 2.0)
+  top_p?: number; // Top-p (nucleus) sampling
+  // Другие параметры API OpenRouter/OpenAI по необходимости
+  // stop?: string | string[];
+  // presence_penalty?: number;
+  // frequency_penalty?: number;
+  // logit_bias?: Record<string, number>;
+  // user?: string; // Уникальный идентификатор конечного пользователя
+  // transforms?: string[]; // Например, ["middle-out"]
+  // route?: string; // "fallback" или "any"
+  // provider?: { order?: string[], require?: string[] };
 }
 
-// --- Streaming specific interfaces ---
-
-// Чанк, который приходит в stream (внутри data: ... SSE сообщения)
-type StreamingChoice = {
-  finish_reason: string | null;
-  native_finish_reason: string | null; // OpenRouter specific
-  delta: {
-    content: string | null; // Часть контента
-    role?: string; // Роль (обычно только в первом чанке assistant)
-    tool_calls?: any[]; // Если модель поддерживает Function/Tool Calling
-    function_call?: any; // Устаревшее, но может приходить
-  };
-  error?: ErrorResponse; // Ошибка внутри чанка
-  index: number; // Индекс выбора (для n > 1, редко используется со стримингом)
-};
-
-export type ErrorResponse = {
-  code: number | string | null; // Код ошибки
-  message: string; // Сообщение об ошибке
-  metadata?: Record<string, unknown>; // Дополнительная информация
-  type?: string; // Тип ошибки (OpenAI style)
-  param?: string | null;
-};
-
-// Структура каждого SSE сообщения (после data: )
+// Определяет структуру чанка данных при потоковой передаче от OpenRouter
 export interface OpenrouterStreamingChunk {
-  id?: string; // Chat completion ID (обычно в первом чанке)
-  object?: string; // 'chat.completion.chunk'
-  created?: number; // timestamp (обычно в первом чанке)
-  model?: string; // Название модели (обычно в первом чанке)
-  choices: StreamingChoice[];
-  // usage usually comes in the final chunk or is delayed
+  id: string; // ID чата
+  object: string; // Тип объекта, например, "chat.completion.chunk"
+  created: number; // Временная метка создания
+  model: string; // Используемая модель
+  choices: Array<{
+    index: number;
+    delta: {
+      role?: OpenrouterMessageRole;
+      content?: string | null;
+      // tool_calls?: any[];
+    };
+    finish_reason: string | null;
+    logprobs?: any;
+    error?: {
+      message: string;
+      type?: string;
+      param?: string | null;
+      code?: string | null;
+    } | null;
+  }>;
+  // usage?: { // Информация об использовании токенов (обычно в последнем чанке или не-потоковом ответе)
+  //   prompt_tokens: number;
+  //   completion_tokens: number;
+  //   total_tokens: number;
+  // };
+  // system_fingerprint?: string; // Системный отпечаток
+  // x_openrouter_version?: string; // Версия OpenRouter
+}
+
+// Определяет структуру полного (не потокового) ответа от OpenRouter/OpenAI API
+export interface OpenrouterCompletionResponse {
+  [x: string]: any;
+  id: string; // ID ответа
+  object: string; // Тип объекта, например, "chat.completion"
+  created: number; // Временная метка создания
+  model: string; // Используемая модель
+  choices: Array<{
+    index: number;
+    message: OpenrouterMessage; // Полное сообщение от ассистента
+    finish_reason: string; // Причина завершения, например, "stop", "length", "tool_calls"
+    logprobs?: any; // Логарифмические вероятности, если запрошены
+  }>;
   usage?: {
     prompt_tokens: number;
     completion_tokens: number;
     total_tokens: number;
   };
+  // system_fingerprint?: string;
+  // x_openrouter_version?: string;
 }
 
-// Не-стриминговый ответ (если stream: false), оставлен для полноты,
-// но наша функция будет возвращать стрим
-export interface OpenrouterNonStreamingResponse {
-  id: string;
-  object: string; // 'chat.completion'
-  created: number; // timestamp
-  model: string; // Название модели, которая реально использовалась
-  choices: Array<{
-    index: number;
-    message: OpenrouterMessage; // Полное сообщение
-    logprobs: null;
-    finish_reason: string;
-  }>;
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-  system_fingerprint?: string;
-}
-
-// Для метода получения моделей
-export interface OpenrouterModel {
-  id: string; // model name
-  name: string;
-  provider: { id: string; name: string } | null;
-  description: string | null;
-  pricing: {
-    prompt: string | null;
-    completion: string | null;
-    request: string | null /* ... */;
-  };
-  // ... other fields
-}
-
+// Определяет структуру ответа для запроса списка моделей от OpenRouter
 export interface OpenrouterModelsResponse {
   data: OpenrouterModel[];
-  // ...
+}
+
+// Определяет структуру информации о модели от OpenRouter
+export interface OpenrouterModel {
+  id: string;
+  name: string;
+  description: string;
+  pricing: {
+    prompt: string;
+    completion: string;
+    request: string;
+    image: string;
+  };
+  context_length: number;
+  architecture: {
+    modality: string;
+    input_modalities: ('text' | 'image')[]; // -
+    tokenizer: string;
+    default_template: string;
+  };
+  top_provider: {
+    max_completion_tokens: number | null;
+  };
+  per_request_limits?: {
+    [key: string]: any;
+  } | null;
 }

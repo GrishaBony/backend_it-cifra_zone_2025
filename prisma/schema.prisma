@@ -38,6 +38,8 @@ model User {
 
   RefreshToken RefreshToken[]
   @@map("users")
+  SupportTicket SupportTicket[] @relation("UserDialogs")
+  Chat Chat[]
 }
 
 // Роли пользователей
@@ -61,57 +63,124 @@ model RefreshToken {
   @@index([userId])
   @@map("refresh_tokens")
 }
-/*
-/// Список доступных LLM-моделей
-model AiModel {
-  id            Int       @id @default(autoincrement())
-  routerModel   String    @unique           // идентификатор в OpenRouter
-  name          String                      // читаемое название
-  isFree        Boolean   @default(false)
-  pricePerToken Float     @default(0)       // стоимость токена (мб по запросам) 
-  createdAt     DateTime  @default(now())
+
+enum SupportTicketType {
+  BUG_REPORT
+  OTHER
 }
 
-/// Диалоги (мультидиалоги и ветвления)
-model Dialog {
-  id             Int       @id @default(autoincrement())
-  title          String    
-  user           User      @relation("UserDialogs", fields: [userId], references: [id])
+model SupportTicket {
+  id            Int       @id @default(autoincrement())
+  type          SupportTicketType? 
+  theme         String?
+  description   String?
+  finished      Boolean   @default(false)
+  
+  user          User      @relation("UserDialogs", fields: [userId], references: [id])
   userId         Int
-  model          AiModel   @relation(fields: [modelId], references: [id])
-  modelId        Int
-  parentDialog   Dialog?   @relation("DialogBranches", fields: [parentDialogId], references: [id])
-  parentDialogId Int?
-  children       Dialog[]  @relation("DialogBranches")
-  messages       Message[]
-  shareLinks     ShareLink[]
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+
+  @@map("support_tickets")
+}
+
+// Список доступных LLM-моделей
+model AiModel {
+  id                 Int       @id @default(autoincrement())
+  modelId            String    @unique // id модели в OpenRouter
+  displayName        String
+  description        String?
+  isFree             Boolean   @default(false)
+  pricePerMToken     Float     @default(0)       // стоимость токена (мб по запросам) 
+  createdAt          DateTime  @default(now())
+  canRecognizeImages Boolean   // может ли модель распознавать изображения
+  maxContextLength   Int      // максимальная длина контекста в токенах
+  // messages    Message[] // Связь с сообщениями, использующими эту LLM
+  @@map("ai_models")
+  Message Message[]
+}
+
+// Глобальные настройки сайта
+model SiteSettings {
+  id                 Int       @id @default(1)
+  fastLLMAnswerModel String    @default("google/gemini-2.0-flash-exp:free")
+  openRouterApiKey    String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+/// Диалоги
+model Chat {
+  id        String   @id @default(cuid())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  parentChatId String?
+  parentChat   Chat?     @relation("ChatHierarchy", fields: [parentChatId], references: [id], onDelete:Cascade)
+  childBranches Chat[]   @relation("ChatHierarchy") // <-- Объяснено выше
+
+  branchedAfterMessageId String? // <-- Объяснено выше
+
+  messages  Message[]
+  isArchived Boolean @default(false)
+  publicLinks PublicLink[]
+
+  PublicLink PublicLink[] @relation("ChatLinks")
+
+  @@map("сhats")
 }
 
 /// Сообщения внутри диалогов
+enum MessageSenderRole {
+  USER
+  AI
+}
 model Message {
-  id              Int            @id @default(autoincrement())
-  dialog          Dialog         @relation(fields: [dialogId], references: [id])
-  dialogId        Int
-  parentMessage   Message?       @relation("MessageReplies", fields: [parentMessageId], references: [id])
-  parentMessageId Int?
-  replies         Message[]      @relation("MessageReplies")
-  sender          MessageSender  @default(USER)
-  content         String
-  file            File?          @relation(fields: [fileId], references: [id])
-  fileId          Int?
-  edited          Boolean        @default(false)
-  shareLinks      ShareLink[]    // публичные ссылки на конкретное сообщение
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id        String   @id @default(cuid())
+  chatId    String
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  
+  content   String   @db.Text
+  role      MessageSenderRole
+  createdAt DateTime @default(now())
+
+  llmId Int? // LLM для этого сообщения
+  llm   AiModel?    @relation(fields: [llmId], references: [id], onDelete:SetNull)
+
+  publicLinks PublicLink[]
+
+  PublicLink PublicLink[] @relation("MessageLinks")
+
+  @@map("messages")
 }
 
-enum MessageSender {
-  USER    // сообщение от пользователя
-  AI      // сообщение от модели
+/// Публичные ссылки для экспорта сообщения или чата
+enum LinkType {
+  CHAT
+  MESSAGE
 }
 
+model PublicLink {
+  id        String    @id @default(cuid())
+  targetChatId String?
+  targetChat   Chat?      @relation("ChatLinks", fields: [targetChatId], references: [id], onDelete:Cascade)
+  
+  targetMessageId String?
+  targetMessage   Message?  @relation("MessageLinks", fields: [targetMessageId], references: [id], onDelete:Cascade)
+
+  type      LinkType 
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+
+  Chat Chat[]
+
+  Message Message[]
+
+  @@map("public_links")
+}
+
+/*
 /// Загрузка файлов (картинки, документы)
 model File {
   id           Int      @id @default(autoincrement())
@@ -123,17 +192,5 @@ model File {
   uploadedById Int
   message      Message? @relation()
   createdAt    DateTime @default(now())
-}
-
-/// Публичные ссылки для экспорта сообщения или чата
-model ShareLink {
-  id        Int      @id @default(autoincrement())
-  token     String   @unique   // генерируется в коде через UUID v4
-  dialog    Dialog   @relation(fields: [dialogId], references: [id])
-  dialogId  Int
-  message   Message? @relation(fields: [messageId], references: [id])
-  messageId Int?
-  expiresAt DateTime? // по желанию ограничить время жизни
-  createdAt DateTime  @default(now())
 }
 */
