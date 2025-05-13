@@ -13,9 +13,13 @@ import {
   SupportWizardState,
   SceneSession,
 } from '../types/wizard-context.type';
+import { SupportService } from 'src/support/support.service';
+import { $Enums } from '@prisma/client';
 
 @Scene('support-wizard')
 export class SupportWizardScene {
+  constructor(private readonly supportService: SupportService) {}
+
   @SceneEnter()
   async onSceneEnter(@Ctx() ctx: WizardContext) {
     // Инициализируем сессию безопасным способом
@@ -99,6 +103,23 @@ export class SupportWizardScene {
         // Получаем все данные из состояния
         const supportType = session.state.supportType || 'Не указано';
         const supportTopic = session.state.supportTopic || 'Не указана';
+
+        const type =
+          supportType !== 'Другое'
+            ? $Enums.SupportTicketType.BUG_REPORT
+            : $Enums.SupportTicketType.OTHER;
+        const userId = ctx.from?.id.toString();
+        if (!userId) {
+          await ctx.reply('Ошибка создания тикета.');
+          break;
+        }
+
+        await this.supportService.createTicket(
+          userId,
+          type,
+          supportTopic,
+          text,
+        );
 
         // Отправляем итоговое сообщение
         await ctx.reply(
